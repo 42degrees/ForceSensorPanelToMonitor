@@ -57,6 +57,7 @@
             // 
             // cbMonitorList
             // 
+            this.cbMonitorList.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.cbMonitorList.FormattingEnabled = true;
             this.cbMonitorList.Location = new System.Drawing.Point(111, 10);
             this.cbMonitorList.Name = "cbMonitorList";
@@ -134,6 +135,7 @@
             // cbRefreshInterval
             // 
             this.cbRefreshInterval.DisplayMember = "itemText";
+            this.cbRefreshInterval.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.cbRefreshInterval.FormattingEnabled = true;
             this.cbRefreshInterval.Location = new System.Drawing.Point(111, 88);
             this.cbRefreshInterval.Name = "cbRefreshInterval";

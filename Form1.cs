@@ -2,12 +2,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Win32.TaskScheduler;
 using System.Windows.Forms;
+using System.IO;
+using System.Security.Principal;
 
 namespace ForceSensorPanelToMonitor
 {
     public partial class formMain1 : Form
     {
+        private readonly static string ForceSensorPanelToMonitorTaskName = "ForceSensorPanelToMonitor";
+
         private Timer _timer = null;
         private Timer _savedTimer = null;
         private bool _startMinimal = false;
@@ -64,6 +69,12 @@ namespace ForceSensorPanelToMonitor
             if (_startMinimal)
             {
                 WindowState = FormWindowState.Minimized;
+            }
+
+            // Set the start at login checkbox if we found a scheduled task with our name on it
+            if (scheduledTaskExists())
+            {
+                chkRunAtStartup.Checked = true;
             }
 
             // Run once when we first start
@@ -228,19 +239,101 @@ namespace ForceSensorPanelToMonitor
             }
         }
 
+        /// <returns>true if the login trigger already exists in the scheduled tasks.</returns>
+        private bool scheduledTaskExists()
+        {
+            try
+            {
+                using (var ts = new TaskService())
+                {
+                    var task = ts.FindTask(ForceSensorPanelToMonitorTaskName);
+                    return null != task;
+                }
+            }
+            catch (Exception e)
+            {
+                MessageBox.Show("An error occurred trying to identify the startup task: " + e.Message);
+            }
+            return false;
+        }
+
+        private void createScheduledTask()
+        {
+            if (scheduledTaskExists())
+            {
+                // Nothing to do.
+                return;
+            }
+
+            using (var ts = new TaskService())
+            {
+                // Create a new task definition and assign properties
+                var task = ts.NewTask();
+
+                task.RegistrationInfo.Description = "Start ForceSensorPanelToMonitor when the current user logs in";
+                task.Principal.RunLevel = TaskRunLevel.Highest;
+
+                // Add a trigger that, starting tomorrow, will fire every other week on Monday
+                // and Saturday and repeat every 10 minutes for the following 11 hours
+                var currentIdentity = WindowsIdentity.GetCurrent();
+                var isAdministrator = (new WindowsPrincipal(currentIdentity).IsInRole(WindowsBuiltInRole.Administrator));
+
+                if (!isAdministrator)
+                {
+                    MessageBox.Show("The current user is not an administrator, cannot configure to run at startup.  Please manually create a scheduled task for this user to run as administrator.");
+                    return;
+                }
+
+                var logonTrigger = new LogonTrigger() { UserId = currentIdentity.Name };
+
+                // Give Aida64 time to launch.  They normally set a 10 second delay after login, so we'll do 30 seconds to make sure they came up.
+                logonTrigger.Delay = TimeSpan.FromSeconds(30);
+                
+                task.Triggers.Add(logonTrigger);
+
+                // Create an action that will launch Notepad whenever the trigger fires
+                task.Actions.Add(new ExecAction("ForceSensorPanelToMonitor.exe", "/StartToTray", Path.GetDirectoryName(Application.ExecutablePath)));
+
+                // Register the task in the root folder
+                ts.RootFolder.RegisterTaskDefinition(ForceSensorPanelToMonitorTaskName, task);
+            }
+        }
+
+        /// <summary>
+        /// Remove the task created with createScheduledTask() above.  Note that the task must be in the root folder in the task scheduler.
+        /// </summary>
+        private void removeScheduledTask()
+        {
+            try
+            {
+                using (var ts = new TaskService())
+                {
+                    var task = ts.GetTask(ForceSensorPanelToMonitorTaskName);
+                    if (null != task)
+                    {
+                        ts.RootFolder.DeleteTask(ForceSensorPanelToMonitorTaskName);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                MessageBox.Show("An error occurred trying to retmove the startup task: " + e.Message);
+            }
+        }
+
         private void chkRunAtStartup_CheckedChanged(object sender, EventArgs e)
         {
             using (RegistryKey key = Registry.CurrentUser.OpenSubKey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", true))
             {
                 if (chkRunAtStartup.Checked)
                 {
-                    // Register ourselves to run minimized with Windows
-                    key.SetValue("ForceSensorPanelToMonitor", "\"" + Application.ExecutablePath + "\" /StartToTray");
+                    // Register ourselves to run minimized when the user logs in.
+                    createScheduledTask();
                 }
                 else
                 {
                     // Remove any registration
-                    key.DeleteValue("ForceSensorPanelToMonitor", false);
+                    removeScheduledTask();
                 }
             }
         }
