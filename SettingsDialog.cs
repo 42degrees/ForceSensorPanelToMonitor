@@ -9,7 +9,7 @@ using System.Security.Principal;
 
 namespace ForceSensorPanelToMonitor
 {
-    public partial class formMain1 : Form
+    public partial class SettingsDialog : Form
     {
         private readonly static string ForceSensorPanelToMonitorTaskName = "ForceSensorPanelToMonitor";
 
@@ -17,7 +17,7 @@ namespace ForceSensorPanelToMonitor
         private Timer _savedTimer = null;
         private bool _startMinimal = false;
 
-        public formMain1(bool startMinimal = false)
+        public SettingsDialog(bool startMinimal = false)
         {
             _startMinimal = startMinimal;
             InitializeComponent();
@@ -81,6 +81,15 @@ namespace ForceSensorPanelToMonitor
             SyncSensorPanel();
         }
 
+        protected override void WndProc(ref Message message)
+        {
+            if (message.Msg == Program.WM_SHOWFIRSTINSTANCE)
+            {
+                restoreWindow();
+            }
+            base.WndProc(ref message);
+        }
+
         private void btnStart_Click(object sender, EventArgs e)
         {
             // Run the algorithm to sync the window with the monitor
@@ -138,6 +147,8 @@ namespace ForceSensorPanelToMonitor
             {
                 ShowInTaskbar = false;
                 trayIcon.Visible = true;
+                //ShowInTaskbar = true;
+                //trayIcon.Visible = false;
                 trayIcon.ShowBalloonTip(1000);
             }
         }
@@ -147,6 +158,11 @@ namespace ForceSensorPanelToMonitor
             ShowInTaskbar = true;
             trayIcon.Visible = false;
             WindowState = FormWindowState.Normal;
+
+            // We do this in case we were tickled by a new execution of ourselves,
+            // since we likely weren't in the front of the other windows.
+            WinApi.ShowWindow(this.Handle, WinApi.SW_SHOWNORMAL);
+            WinApi.SetForegroundWindow(this.Handle);
         }
 
         private void trayIcon_MouseDoubleClick(object sender, MouseEventArgs e)
@@ -265,37 +281,44 @@ namespace ForceSensorPanelToMonitor
                 return;
             }
 
-            using (var ts = new TaskService())
+            try
             {
-                // Create a new task definition and assign properties
-                var task = ts.NewTask();
-
-                task.RegistrationInfo.Description = "Start ForceSensorPanelToMonitor when the current user logs in";
-                task.Principal.RunLevel = TaskRunLevel.Highest;
-
-                // Add a trigger that, starting tomorrow, will fire every other week on Monday
-                // and Saturday and repeat every 10 minutes for the following 11 hours
-                var currentIdentity = WindowsIdentity.GetCurrent();
-                var isAdministrator = (new WindowsPrincipal(currentIdentity).IsInRole(WindowsBuiltInRole.Administrator));
-
-                if (!isAdministrator)
+                using (var ts = new TaskService())
                 {
-                    MessageBox.Show("The current user is not an administrator, cannot configure to run at startup.  Please manually create a scheduled task for this user to run as administrator.");
-                    return;
-                }
+                    // Create a new task definition and assign properties
+                    var task = ts.NewTask();
 
-                var logonTrigger = new LogonTrigger() { UserId = currentIdentity.Name };
+                    task.RegistrationInfo.Description = "Start ForceSensorPanelToMonitor when the current user logs in";
+                    task.Principal.RunLevel = TaskRunLevel.Highest;
 
-                // Give Aida64 time to launch.  They normally set a 10 second delay after login, so we'll do 30 seconds to make sure they came up.
-                logonTrigger.Delay = TimeSpan.FromSeconds(30);
+                    // Add a trigger that, starting tomorrow, will fire every other week on Monday
+                    // and Saturday and repeat every 10 minutes for the following 11 hours
+                    var currentIdentity = WindowsIdentity.GetCurrent();
+                    var isAdministrator = (new WindowsPrincipal(currentIdentity).IsInRole(WindowsBuiltInRole.Administrator));
+
+                    if (!isAdministrator)
+                    {
+                        MessageBox.Show("The current user is not an administrator, cannot configure to run at startup.  Please manually create a scheduled task for this user to run as an administrator.");
+                        return;
+                    }
+
+                    var logonTrigger = new LogonTrigger() { UserId = currentIdentity.Name };
+
+                    // Give Aida64 time to launch.  They normally set a 10 second delay after login, so we'll do 30 seconds to make sure they came up.
+                    logonTrigger.Delay = TimeSpan.FromSeconds(30);
                 
-                task.Triggers.Add(logonTrigger);
+                    task.Triggers.Add(logonTrigger);
 
-                // Create an action that will launch Notepad whenever the trigger fires
-                task.Actions.Add(new ExecAction("ForceSensorPanelToMonitor.exe", "/StartToTray", Path.GetDirectoryName(Application.ExecutablePath)));
+                    // Create an action that will launch Notepad whenever the trigger fires
+                    task.Actions.Add(new ExecAction("ForceSensorPanelToMonitor.exe", "/StartToTray", Path.GetDirectoryName(Application.ExecutablePath)));
 
-                // Register the task in the root folder
-                ts.RootFolder.RegisterTaskDefinition(ForceSensorPanelToMonitorTaskName, task);
+                    // Register the task in the root folder
+                    ts.RootFolder.RegisterTaskDefinition(ForceSensorPanelToMonitorTaskName, task);
+                }
+            }
+            catch (Exception e)
+            {
+                MessageBox.Show("An error occurred trying to create the startup task: " + e.Message);
             }
         }
 
@@ -317,7 +340,7 @@ namespace ForceSensorPanelToMonitor
             }
             catch (Exception e)
             {
-                MessageBox.Show("An error occurred trying to retmove the startup task: " + e.Message);
+                MessageBox.Show("An error occurred trying to remove the startup task: " + e.Message);
             }
         }
 
