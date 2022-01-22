@@ -22,8 +22,14 @@ to stay mapped to any specific monitor.
 
 Note that if you leave the Refresh rate at Manual, that means that the program will only respond to changes in the display profile (like removing a monitor, changing monitor settings or size, etc.) or if you manually press the Refresh Now button.
 Also, it will always move the window when it is first run.  Note that if the sensor panel is not running when we first run the program does not currently notice when you do open the sensor panel, so you'll have to hit Refresh Now.  
+
 To make sure we run after the sensor panel when it registers itself to run on login, it sets a time delay to make sure the sensor panel is up first.
 It currently throws no errors if the window isn't up, it just silently fails.  If this is an issue, let me know and I can add code to monitor for the window to be created.
+
+## Beta testers
+
+Until I get the installer created, if you want to try it but don't have the ability to compile it, let me know and I'll send you a zip file to try.
+Send requests to [ForceSensorPanelToMonitor@pingbot.com](mailto:ForceSensorPanelToMonitor@pingbot.com).
 
 ## License
 
