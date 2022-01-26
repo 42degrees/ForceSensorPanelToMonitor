@@ -26,6 +26,8 @@ Also, it will always move the window when it is first run.  Note that if the sen
 To make sure we run after the sensor panel when it registers itself to run on login, it sets a time delay to make sure the sensor panel is up first.
 It currently throws no errors if the window isn't up, it just silently fails.  If this is an issue, let me know and I can add code to monitor for the window to be created.
 
+The program will also optionally monitor the panel that is being monitored to see if any applications have accidentally (or intentionally) put windows on there.  If it finds any it will attempt to move the window to the nearest other monitor (doing its best to keep the window the same size and relation to the top and left of the monitor).  It will only do this when it checks the sensor panel, so it is recommended if you want this feature that you enable the timed polling feature as well, or it may only move rogue windows very rarely.  I have mine set to checking every 10 seconds.  The actual function is very lightweight, so I don't expect it to be noticable to your system.
+
 ## Beta testers
 
 Until I get the installer created, if you want to try it but don't have the ability to compile it, let me know and I'll send you a zip file to try.
