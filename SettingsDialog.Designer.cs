@@ -43,6 +43,7 @@
             this.lblMessage = new System.Windows.Forms.Label();
             this.label3 = new System.Windows.Forms.Label();
             this.chkRunAtStartup = new System.Windows.Forms.CheckBox();
+            this.chkPreventOtherApplications = new System.Windows.Forms.CheckBox();
             this.SuspendLayout();
             // 
             // btnStart
@@ -53,7 +54,7 @@
             this.btnStart.TabIndex = 0;
             this.btnStart.Text = "Refresh Now";
             this.btnStart.UseVisualStyleBackColor = true;
-            this.btnStart.Click += new System.EventHandler(this.btnStart_Click);
+            this.btnStart.Click += new System.EventHandler(this.BtnStart_Click);
             // 
             // cbMonitorList
             // 
@@ -108,7 +109,7 @@
             this.btnClose.TabIndex = 0;
             this.btnClose.Text = "Exit";
             this.btnClose.UseVisualStyleBackColor = true;
-            this.btnClose.Click += new System.EventHandler(this.btnClose_Click);
+            this.btnClose.Click += new System.EventHandler(this.BtnClose_Click);
             // 
             // trayIcon
             // 
@@ -118,14 +119,14 @@
             this.trayIcon.Icon = ((System.Drawing.Icon)(resources.GetObject("trayIcon.Icon")));
             this.trayIcon.Text = "Force Sensor Panel Tool";
             this.trayIcon.Visible = true;
-            this.trayIcon.Click += new System.EventHandler(this.trayIcon_Click);
-            this.trayIcon.MouseDoubleClick += new System.Windows.Forms.MouseEventHandler(this.trayIcon_MouseDoubleClick);
+            this.trayIcon.Click += new System.EventHandler(this.TrayIcon_Click);
+            this.trayIcon.MouseDoubleClick += new System.Windows.Forms.MouseEventHandler(this.TrayIcon_MouseDoubleClick);
             // 
             // label2
             // 
             this.label2.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(13, 156);
+            this.label2.Location = new System.Drawing.Point(13, 182);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(460, 13);
             this.label2.TabIndex = 7;
@@ -142,7 +143,7 @@
             this.cbRefreshInterval.Size = new System.Drawing.Size(241, 21);
             this.cbRefreshInterval.TabIndex = 6;
             this.cbRefreshInterval.ValueMember = "seconds";
-            this.cbRefreshInterval.SelectedIndexChanged += new System.EventHandler(this.cbRefreshInterval_SelectedIndexChanged);
+            this.cbRefreshInterval.SelectedIndexChanged += new System.EventHandler(this.CbRefreshInterval_SelectedIndexChanged);
             // 
             // lblMessage
             // 
@@ -156,7 +157,7 @@
             // 
             this.label3.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(12, 172);
+            this.label3.Location = new System.Drawing.Point(12, 198);
             this.label3.Name = "label3";
             this.label3.Size = new System.Drawing.Size(380, 13);
             this.label3.TabIndex = 7;
@@ -172,14 +173,26 @@
             this.chkRunAtStartup.TabIndex = 9;
             this.chkRunAtStartup.Text = "Start application with windows";
             this.chkRunAtStartup.UseVisualStyleBackColor = true;
-            this.chkRunAtStartup.CheckedChanged += new System.EventHandler(this.chkRunAtStartup_CheckedChanged);
+            this.chkRunAtStartup.CheckedChanged += new System.EventHandler(this.ChkRunAtStartup_CheckedChanged);
             // 
-            // formMain1
+            // chkPreventOtherApplications
+            // 
+            this.chkPreventOtherApplications.AutoSize = true;
+            this.chkPreventOtherApplications.Location = new System.Drawing.Point(16, 144);
+            this.chkPreventOtherApplications.Name = "chkPreventOtherApplications";
+            this.chkPreventOtherApplications.Size = new System.Drawing.Size(229, 17);
+            this.chkPreventOtherApplications.TabIndex = 9;
+            this.chkPreventOtherApplications.Text = "Prevent applications from using this monitor";
+            this.chkPreventOtherApplications.UseVisualStyleBackColor = true;
+            this.chkPreventOtherApplications.CheckedChanged += new System.EventHandler(this.ChkRunAtStartup_CheckedChanged);
+            // 
+            // SettingsDialog
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.btnClose;
-            this.ClientSize = new System.Drawing.Size(542, 205);
+            this.ClientSize = new System.Drawing.Size(542, 231);
+            this.Controls.Add(this.chkPreventOtherApplications);
             this.Controls.Add(this.chkRunAtStartup);
             this.Controls.Add(this.lblMessage);
             this.Controls.Add(this.label3);
@@ -194,11 +207,11 @@
             this.Controls.Add(this.btnStart);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.MaximizeBox = false;
-            this.Name = "formMain1";
+            this.Name = "SettingsDialog";
             this.Text = "Force sensor panel to stick to a single monitor";
-            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.formMain1_FormClosing);
-            this.Load += new System.EventHandler(this.formMain1_Load);
-            this.Resize += new System.EventHandler(this.formMain1_Resize);
+            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.FormMain1_FormClosing);
+            this.Load += new System.EventHandler(this.FormMain1_Load);
+            this.Resize += new System.EventHandler(this.FormMain1_Resize);
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -219,6 +232,7 @@
         private System.Windows.Forms.ComboBox cbRefreshInterval;
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.CheckBox chkRunAtStartup;
+        private System.Windows.Forms.CheckBox chkPreventOtherApplications;
     }
 }
 
