@@ -6,6 +6,7 @@ using System.Linq;
 using Microsoft.Win32.TaskScheduler;
 using System.Windows.Forms;
 using System.IO;
+using System.Security.Policy;
 using System.Security.Principal;
 using ForceSensorPanelToMonitor.Properties;
 
@@ -14,6 +15,8 @@ namespace ForceSensorPanelToMonitor
     public partial class SettingsDialog : Form
     {
         private static readonly string ForceSensorPanelToMonitorTaskName = "ForceSensorPanelToMonitor";
+
+        private static SessionSwitchEventHandler _sessionSwitchEventHandler;
 
         private readonly bool _startMinimal = false;
 
@@ -25,6 +28,14 @@ namespace ForceSensorPanelToMonitor
             _startMinimal = startMinimal;
             InitializeComponent();
             SystemEvents.DisplaySettingsChanged += new EventHandler(SystemEvents_DisplaySettingsChanged);
+
+            _sessionSwitchEventHandler = new SessionSwitchEventHandler(SystemEvents_SessionSwitch);
+            SystemEvents.SessionSwitch += _sessionSwitchEventHandler;
+        }
+        ~SettingsDialog()
+        {
+            // Remove the static handler so that we don't leak
+            SystemEvents.SessionSwitch -= _sessionSwitchEventHandler;
         }
 
         #region Overrides
@@ -168,8 +179,6 @@ namespace ForceSensorPanelToMonitor
             {
                 ShowInTaskbar = false;
                 trayIcon.Visible = true;
-                //ShowInTaskbar = true;
-                //trayIcon.Visible = false;
                 trayIcon.ShowBalloonTip(1000);
             }
         }
@@ -223,6 +232,19 @@ namespace ForceSensorPanelToMonitor
             {
                 // Remove any registration
                 RemoveScheduledTask();
+            }
+        }
+
+        /// <summary>
+        /// Called when the session switch event is triggered
+        /// </summary>
+        private void SystemEvents_SessionSwitch(object sender, SessionSwitchEventArgs e)
+        {
+            if (e.Reason == SessionSwitchReason.SessionLogon
+                || e.Reason == SessionSwitchReason.SessionUnlock
+                || e.Reason == SessionSwitchReason.ConsoleConnect)
+            {
+                SyncSensorPanel();
             }
         }
 
