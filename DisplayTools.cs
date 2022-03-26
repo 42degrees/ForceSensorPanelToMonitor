@@ -31,7 +31,7 @@ namespace ForceSensorPanelToMonitor
 
         private static string MonitorFriendlyName(WinApi.LUID adapterId, uint targetId)
         {
-            var deviceName = new WinApi.DISPLAYCONFIG_TARGET_DEVICE_NAME
+            var targetDeviceName = new WinApi.DISPLAYCONFIG_TARGET_DEVICE_NAME
             {
                 header =
                 {
@@ -41,50 +41,119 @@ namespace ForceSensorPanelToMonitor
                     type = WinApi.DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME
                 }
             };
-            var error = WinApi.DisplayConfigGetDeviceInfo(ref deviceName);
+            var error = WinApi.DisplayConfigGetDeviceInfo(ref targetDeviceName);
             if (error != ERROR_SUCCESS)
                 throw new Win32Exception(error);
-            return deviceName.monitorFriendlyDeviceName;
+            return targetDeviceName.monitorFriendlyDeviceName;
         }
 
-        private static IEnumerable<string> GetAllMonitorsFriendlyNames()
+        private static string MonitorSource(WinApi.LUID adapterId, uint targetId)
         {
-            var error = WinApi.GetDisplayConfigBufferSizes(WinApi.QUERY_DEVICE_CONFIG_FLAGS.QDC_ONLY_ACTIVE_PATHS, 
-                                                               out var pathCount, 
-                                                               out var modeCount);
+            var sourceDeviceName = new WinApi.DISPLAYCONFIG_SOURCE_DEVICE_NAME
+            {
+                header =
+                {
+                    size = (uint)Marshal.SizeOf(typeof (WinApi.DISPLAYCONFIG_SOURCE_DEVICE_NAME)),
+                    adapterId = adapterId,
+                    id = targetId,
+                    type = WinApi.DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME
+                }
+            };
+            var error = WinApi.DisplayConfigGetDeviceInfo(ref sourceDeviceName);
+            if (error != ERROR_SUCCESS)
+                throw new Win32Exception(error);
+            return sourceDeviceName.viewGdiDeviceName;
+        }
+
+        public static IEnumerable<Monitor> GetAllMonitors()
+        {
+            var error = WinApi.GetDisplayConfigBufferSizes(WinApi.QUERY_DEVICE_CONFIG_FLAGS.QDC_DATABASE_CURRENT, 
+                                                           out var pathCount, 
+                                                           out var modeCount);
             if (error != ERROR_SUCCESS)
                 throw new Win32Exception(error);
 
             var displayPaths = new WinApi.DISPLAYCONFIG_PATH_INFO[pathCount];
             var displayModes = new WinApi.DISPLAYCONFIG_MODE_INFO[modeCount];
-            error = WinApi.QueryDisplayConfig(WinApi.QUERY_DEVICE_CONFIG_FLAGS.QDC_ONLY_ACTIVE_PATHS,
-                ref pathCount, displayPaths, ref modeCount, displayModes, IntPtr.Zero);
+            uint currentTopologyId = 0;
+
+            error = WinApi.QueryDisplayConfig(WinApi.QUERY_DEVICE_CONFIG_FLAGS.QDC_DATABASE_CURRENT,
+                                              ref pathCount, 
+                                              displayPaths, 
+                                              ref modeCount, 
+                                              displayModes,
+                                              out currentTopologyId);
+
             if (error != ERROR_SUCCESS)
                 throw new Win32Exception(error);
 
-            for (var i = 0; i < modeCount; i++)
-                if (displayModes[i].infoType == WinApi.DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_TARGET)
-                    yield return MonitorFriendlyName(displayModes[i].adapterId, displayModes[i].id);
-        }
+            if (!Enum.IsDefined(typeof(WinApi.DisplayConfigTopology), currentTopologyId))
+            {
+                throw new InvalidTopologyException("The current topology is unknown");
+            }
 
-        public static List<string> GetFriendlyNames(this Screen screen)
-        {
-            var allFriendlyNames = GetAllMonitorsFriendlyNames();
-            return allFriendlyNames.ToList<string>();
-        }
+            var currentTopology = (WinApi.DisplayConfigTopology)currentTopologyId;
 
-        public static List<Screen> GetAllMonitorInfo()
-        {
-            return Screen.AllScreens.ToList<Screen>();
-        }
+            if (currentTopology != WinApi.DisplayConfigTopology.DISPLAYCONFIG_TOPOLOGY_EXTEND)
+            {
+                throw new InvalidTopologyException("The current topology is {currentTopology}, but this only works if the topology is DISPLAYCONFIG_TOPOLOGY_EXTEND.");
+            }
 
-        public static string DeviceFriendlyName(this Screen screen)
-        {
-            var allFriendlyNames = GetAllMonitorsFriendlyNames();
-            for (var index = 0; index < Screen.AllScreens.Length; index++)
-                if (Equals(screen, Screen.AllScreens[index]))
-                    return allFriendlyNames.ToArray()[index];
-            return null;
+            var screens = Screen.AllScreens;
+
+            var monitors = new List<Monitor>();
+            foreach (var displayPath in displayPaths)
+            {
+                var currentDisplayTarget = displayModes.Single(mode => mode.infoType == WinApi.DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_TARGET
+                                                                    && mode.adapterId.Equals(displayPath.targetInfo.adapterId)
+                                                                    && mode.id == displayPath.targetInfo.id);
+
+                var currentDisplaySource = displayModes.Single(mode => mode.infoType == WinApi.DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE
+                                                                    && mode.adapterId.Equals(displayPath.sourceInfo.adapterId)
+                                                                    && mode.id == displayPath.sourceInfo.id);
+
+                var currentScreen = screens.Single(screen => screen.Bounds.Left == currentDisplaySource.modeInfo.sourceMode.position.x
+                                                          && screen.Bounds.Top  == currentDisplaySource.modeInfo.sourceMode.position.y);
+
+                var sourceAdapterId = currentDisplaySource.adapterId;
+                var targetAdapterId = currentDisplayTarget.adapterId;
+
+                var monitor = new Monitor()
+                {
+                    TargetMonitorId = currentDisplayTarget.id,
+                    SourceMonitorId = currentDisplaySource.id,
+                    AdapterId = currentDisplayTarget.adapterId,
+                    Bounds = currentScreen.Bounds,
+                    DeviceName = currentScreen.DeviceName,
+                    IsPrimary = currentScreen.Primary,
+                    WorkingArea = currentScreen.WorkingArea,
+                    ActiveSize = currentDisplayTarget.modeInfo.targetMode.targetVideoSignalInfo.activeSize,
+                    PixelCount = currentScreen.Bounds.Width * currentScreen.Bounds.Height,
+                };
+
+                monitor.FriendlyName = MonitorFriendlyName(monitor.AdapterId, monitor.TargetMonitorId);
+
+                monitors.Add(monitor);
+            }
+
+            // Combine any monitors that are using the same source, and remove the duplicates.
+            foreach (var deviceName in monitors.Select(monitor => monitor.DeviceName).Distinct().ToList())
+            {
+                var monitorsAttachedToDevice = monitors.Where(monitor => monitor.DeviceName == deviceName).ToList();
+
+                if (monitorsAttachedToDevice.Count() > 1)
+                {
+                    var monitorToKeep = monitorsAttachedToDevice.First();
+
+                    foreach (var monitor in monitorsAttachedToDevice.Skip(1))
+                    {
+                        monitorToKeep.FriendlyName = monitorToKeep.FriendlyName + "/" + monitor.FriendlyName;
+                        monitors.Remove(monitor);
+                    }
+                }
+            }
+
+            return monitors;
         }
 
         public static IntPtr FindWindowByClassName(string className)

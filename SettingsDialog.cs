@@ -32,6 +32,7 @@ namespace ForceSensorPanelToMonitor
             _sessionSwitchEventHandler = new SessionSwitchEventHandler(SystemEvents_SessionSwitch);
             SystemEvents.SessionSwitch += _sessionSwitchEventHandler;
         }
+
         ~SettingsDialog()
         {
             // Remove the static handler so that we don't leak
@@ -53,6 +54,39 @@ namespace ForceSensorPanelToMonitor
 
         #region Event Handlers
 
+        private void FillMonitorList()
+        {
+            var savedMonitorName = Settings.Default.MonitorName;
+
+            // Note that this list can contain monitors that mirror another.
+            var allMonitors = DisplayTools.GetAllMonitors();
+
+            cbMonitorList.Items.Clear();
+            foreach (var monitor in allMonitors.OrderBy(monitor => monitor.FriendlyName))
+            {
+                var index = cbMonitorList.Items.Add(monitor.FriendlyName);
+                if (savedMonitorName == cbMonitorList.Items[index].ToString())
+                {
+                    cbMonitorList.SelectedIndex = index;
+                }
+            }
+
+            // If no monitors were selected, let's see if maybe there was
+            // a mirrored monitor selected previously, but the monitors have
+            // been split back up.  Pick the lowest resolution monitor from the
+            // group that was split.
+            if (cbMonitorList.SelectedIndex == -1)
+            {
+                var monitorNameForTest = "/" + savedMonitorName + "/";
+                var selectedMonitors = allMonitors.Where(monitor => monitorNameForTest.Contains("/" + monitor.FriendlyName + "/"))
+                                                  .OrderBy(monitor => monitor.PixelCount);
+                if (selectedMonitors.Count() > 0)
+                {
+                    cbMonitorList.SelectedIndex = cbMonitorList.FindStringExact(selectedMonitors.First().FriendlyName);
+                }
+            }
+        }
+
         private void FormMain1_Load(object sender, EventArgs e)
         {
             var savedMonitorName = Settings.Default.MonitorName;
@@ -61,15 +95,7 @@ namespace ForceSensorPanelToMonitor
             var savedPreventOtherApplications = Settings.Default.PreventOtherApplications;
 
             // Add all the monitors to the drop-down list
-
-            foreach (var screen in DisplayTools.GetAllMonitorInfo())
-            {
-                var index = cbMonitorList.Items.Add(screen.DeviceFriendlyName());
-                if (savedMonitorName == cbMonitorList.Items[index].ToString())
-                {
-                    cbMonitorList.SelectedIndex = index;
-                }
-            }
+            FillMonitorList();
 
             var intervalValues = new List<IntervalComboBoxItem>
             {
@@ -132,23 +158,29 @@ namespace ForceSensorPanelToMonitor
         /// <returns>true if the user really wanted to close the application.</returns>
         private void FormMain1_FormClosing(object sender, FormClosingEventArgs e)
         {
-            var dr = MessageBox.Show(
-                "If you exit the app, the sensor panel may move.  " 
-                + "Minimize if you want to hide the app in the tray.  " 
-                + "Are you sure you want to quit?", 
-                "Leaving App", 
-                MessageBoxButtons.YesNo, 
-                MessageBoxIcon.Question);
-
-            if (dr == DialogResult.No)
+            if (e.CloseReason != CloseReason.WindowsShutDown)
             {
-                e.Cancel = true;
-                return;
+                var dr = MessageBox.Show(
+                    "If you exit the app, the sensor panel may move.  "
+                    + "Minimize if you want to hide the app in the tray.  "
+                    + "Are you sure you want to quit?",
+                    "Leaving App",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (dr == DialogResult.No)
+                {
+                    e.Cancel = true;
+                    return;
+                }
             }
         }
 
         public void SystemEvents_DisplaySettingsChanged(object sender, EventArgs e)
         {
+            // Update the monitors in the drop-down list, as monitors may have been added
+            FillMonitorList();
+
             SyncSensorPanel();
         }
 
@@ -271,11 +303,11 @@ namespace ForceSensorPanelToMonitor
         /// Searches through all of the attached monitors and returns the one they have selected in the UI.
         /// </summary>
         /// <returns>The chosen monitor or null if the monitor could not be found.</returns>
-        private Screen GetChosenMonitor()
+        private Monitor GetChosenMonitor()
         {
-            return DisplayTools
-                  .GetAllMonitorInfo()
-                  .FirstOrDefault(screen => screen.DeviceFriendlyName() == (string)cbMonitorList.SelectedItem);
+            var allMonitors = DisplayTools.GetAllMonitors();
+            var currentMonitor = allMonitors.SingleOrDefault(monitor => monitor.FriendlyName == (string)cbMonitorList.SelectedItem);
+            return currentMonitor;
         }
 
         /// <summary>
@@ -286,7 +318,6 @@ namespace ForceSensorPanelToMonitor
         private void SyncSensorPanel()
         {
             var chosenScreen = GetChosenMonitor();
-
             if (null != chosenScreen)
             {
                 // Get the window with the selected class name
@@ -315,10 +346,10 @@ namespace ForceSensorPanelToMonitor
         /// </summary>
         private void MoveErroneousWindows()
         {
-            var chosenScreen = GetChosenMonitor();
-            if (null != chosenScreen)
+            var chosenMonitor = GetChosenMonitor();
+            if (null != chosenMonitor)
             {
-                var nearestMonitor = GetNearestMonitor(chosenScreen: chosenScreen);
+                var nearestMonitor = GetNearestMonitor(chosenMonitor: chosenMonitor);
 
                 if (null != nearestMonitor)
                 {
@@ -336,15 +367,15 @@ namespace ForceSensorPanelToMonitor
                         }
 
                         // Check if the window is on the sensor panel monitor
-                        var isOnChosenScreen = chosenScreen.Bounds.Contains(window.WindowLocation.Location);
+                        var isOnChosenScreen = chosenMonitor.Bounds.Contains(window.WindowLocation.Location);
                         if (!isOnChosenScreen)
                         {
                             continue;
                         }
 
                         // Found one, move it to the nearest monitor
-                        var distanceFromOriginX = window.WindowLocation.X - chosenScreen.Bounds.X;
-                        var distanceFromOriginY = window.WindowLocation.Y - chosenScreen.Bounds.Y;
+                        var distanceFromOriginX = window.WindowLocation.X - chosenMonitor.Bounds.X;
+                        var distanceFromOriginY = window.WindowLocation.Y - chosenMonitor.Bounds.Y;
 
                         // Move it to the same offset on the nearest monitor
                         // We need to make sure we're on the monitor though
@@ -370,25 +401,25 @@ namespace ForceSensorPanelToMonitor
         /// To do this we calculate the distance from the center of chosenScreen
         /// to the center of every other and choose the one that is the closest.
         /// </summary>
-        /// <param name="chosenScreen">The screen from which to measure.</param>
+        /// <param name="chosenMonitor">The screen from which to measure.</param>
         /// <returns>The closest screen (if there were no other screens, returns null).</returns>
         /// <exception cref="NotImplementedException"></exception>
-        private Screen GetNearestMonitor(Screen chosenScreen)
+        private Monitor GetNearestMonitor(Monitor chosenMonitor)
         {
-            if (null == chosenScreen)
+            if (null == chosenMonitor)
             {
                 throw new ArgumentException("chosenScreen was null");
             }
 
-            Screen closestMonitor = null;
+            Monitor closestMonitor = null;
 
-            var sensorPanelCenter = new Point(chosenScreen.Bounds.X + chosenScreen.Bounds.Width/2,
-                                              chosenScreen.Bounds.Y + chosenScreen.Bounds.Height/2);
+            var sensorPanelCenter = new Point(chosenMonitor.Bounds.X + chosenMonitor.Bounds.Width/2,
+                                              chosenMonitor.Bounds.Y + chosenMonitor.Bounds.Height/2);
             var closestDistance = double.MaxValue;
-            foreach (var screen in DisplayTools.GetAllMonitorInfo())
+            foreach (var monitor in DisplayTools.GetAllMonitors())
             {
-                var screenCenter = new Point(screen.Bounds.X + screen.Bounds.Width / 2,
-                                             screen.Bounds.Y + screen.Bounds.Height / 2);
+                var screenCenter = new Point(monitor.Bounds.X + monitor.Bounds.Width / 2,
+                                             monitor.Bounds.Y + monitor.Bounds.Height / 2);
 
                 var distance = Math.Sqrt(  Math.Pow(sensorPanelCenter.X - screenCenter.X, 2) 
                                                + Math.Pow(sensorPanelCenter.Y - screenCenter.Y, 2));
@@ -398,7 +429,7 @@ namespace ForceSensorPanelToMonitor
                 if (distance > 1 && distance < closestDistance)
                 {
                     closestDistance = distance;
-                    closestMonitor = screen;
+                    closestMonitor = monitor;
                 }
             }
 
@@ -536,6 +567,12 @@ namespace ForceSensorPanelToMonitor
             {
                 MessageBox.Show("An error occurred trying to remove the startup task: " + e.Message);
             }
+        }
+
+        private void SettingsDialog_Activated(object sender, EventArgs e)
+        {
+            // Every time we get focus, refresh the monitor list
+            FillMonitorList();
         }
     }
 

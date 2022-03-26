@@ -209,6 +209,7 @@
             this.MaximizeBox = false;
             this.Name = "SettingsDialog";
             this.Text = "Force sensor panel to stick to a single monitor";
+            this.Activated += new System.EventHandler(this.SettingsDialog_Activated);
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.FormMain1_FormClosing);
             this.Load += new System.EventHandler(this.FormMain1_Load);
             this.Resize += new System.EventHandler(this.FormMain1_Resize);

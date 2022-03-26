@@ -64,6 +64,8 @@
   <ItemGroup>
     <Compile Include="DisplayTools.cs" />
     <Compile Include="HRESULT.cs" />
+    <Compile Include="InvalidTopologyException.cs" />
+    <Compile Include="Monitor.cs" />
     <Compile Include="SettingsDialog.cs">
       <SubType>Form</SubType>
     </Compile>

@@ -267,6 +267,14 @@ namespace ForceSensorPanelToMonitor
             public string monitorDevicePath;
         }
 
+        public struct DISPLAYCONFIG_SOURCE_DEVICE_NAME
+        {
+            public DISPLAYCONFIG_DEVICE_INFO_HEADER header;
+
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+            public string viewGdiDeviceName;
+        }
+
         [StructLayout(LayoutKind.Sequential)]
         public struct RECT
         {
@@ -295,6 +303,16 @@ namespace ForceSensorPanelToMonitor
             DWMWA_FREEZE_REPRESENTATION,
             DWMWA_LAST
         };
+
+        public enum DisplayConfigTopology : UInt32
+        {
+            DISPLAYCONFIG_TOPOLOGY_INTERNAL     = 0x00000001,
+            DISPLAYCONFIG_TOPOLOGY_CLONE        = 0x00000002,
+            DISPLAYCONFIG_TOPOLOGY_EXTEND       = 0x00000004,
+            DISPLAYCONFIG_TOPOLOGY_EXTERNAL     = 0x00000008,
+        };
+
+
         #endregion
 
 
@@ -366,10 +384,13 @@ namespace ForceSensorPanelToMonitor
         public static extern int QueryDisplayConfig(QUERY_DEVICE_CONFIG_FLAGS flags,
             ref uint numPathArrayElements, [Out] DISPLAYCONFIG_PATH_INFO[] pathInfoArray,
             ref uint numModeInfoArrayElements, [Out] DISPLAYCONFIG_MODE_INFO[] modeInfoArray,
-            IntPtr currentTopologyId);
+            out uint currentTopologyId);
 
         [DllImport("user32.dll")]
-        public static extern int DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_TARGET_DEVICE_NAME deviceName);
+        public static extern int DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_TARGET_DEVICE_NAME deviceTargetName);
+
+        [DllImport("user32.dll")]
+        public static extern int DisplayConfigGetDeviceInfo(ref DISPLAYCONFIG_SOURCE_DEVICE_NAME deviceSourceName);
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
