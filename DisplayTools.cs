@@ -65,8 +65,48 @@ namespace ForceSensorPanelToMonitor
             return sourceDeviceName.viewGdiDeviceName;
         }
 
+        /// <summary>
+        /// Check whether current session is locked. 
+        /// Note: If UAC popups a secure desktop, this method may also fail. 
+        ///       There is no API for differentiating between Locked Desktop
+        ///       and UAC Secure Desktop.
+        ///       
+        /// Based on code from OneCodeTeam in GitHub: 
+        /// https://github.com/microsoftarchive/msdn-code-gallery-microsoft
+        /// </summary>
+        public static bool IsLocked()
+        {
+            var hDesktop = IntPtr.Zero;
+            try
+            {
+
+                // Opens the desktop that receives user input.
+                hDesktop = WinApi.OpenInputDesktop(dwFlags: 0,
+                                                   fInherit: false,
+                                                   dwDesiredAccess: WinApi.ACCESS_MASK.DESKTOP_READOBJECTS 
+                                                                  | WinApi.ACCESS_MASK.DESKTOP_WRITEOBJECTS);
+            }
+            finally
+            {
+                // Close an open handle to a desktop object.
+                if (IntPtr.Zero != hDesktop)
+                {
+                    WinApi.CloseDesktop(hDesktop);
+                }
+            }
+
+            // If hDesktop is IntPtr.Zero, then the session is locked.
+            return IntPtr.Zero == hDesktop;
+        }
+
         public static IEnumerable<Monitor> GetAllMonitors()
         {
+            if (IsLocked())
+            {
+                // The current session is locked, don't bother checking.
+                return new List<Monitor>();
+            }
+
             var error = WinApi.GetDisplayConfigBufferSizes(WinApi.QUERY_DEVICE_CONFIG_FLAGS.QDC_DATABASE_CURRENT, 
                                                            out var pathCount, 
                                                            out var modeCount);
@@ -104,13 +144,24 @@ namespace ForceSensorPanelToMonitor
             var monitors = new List<Monitor>();
             foreach (var displayPath in displayPaths)
             {
-                var currentDisplayTarget = displayModes.Single(mode => mode.infoType == WinApi.DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_TARGET
+                WinApi.DISPLAYCONFIG_MODE_INFO currentDisplayTarget, currentDisplaySource;
+                try
+                {
+                    currentDisplayTarget = displayModes.Single(mode => mode.infoType == WinApi.DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_TARGET
                                                                     && mode.adapterId.Equals(displayPath.targetInfo.adapterId)
                                                                     && mode.id == displayPath.targetInfo.id);
 
-                var currentDisplaySource = displayModes.Single(mode => mode.infoType == WinApi.DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE
+                    currentDisplaySource = displayModes.Single(mode => mode.infoType == WinApi.DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE
                                                                     && mode.adapterId.Equals(displayPath.sourceInfo.adapterId)
                                                                     && mode.id == displayPath.sourceInfo.id);
+                }
+                catch(InvalidOperationException)
+                {
+                    // This can happen if an event fires while the console is locked or we fire while the UAC
+                    // secure desktop is active.  We should now be detecting this above in the "IsLocked()" method
+                    // but I'm putting this here as well, just in case there are other scenarios we aren't catching.
+                    continue;
+                }
 
                 var currentScreen = screens.Single(screen => screen.Bounds.Left == currentDisplaySource.modeInfo.sourceMode.position.x
                                                           && screen.Bounds.Top  == currentDisplaySource.modeInfo.sourceMode.position.y);
