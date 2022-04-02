@@ -145,6 +145,7 @@ namespace ForceSensorPanelToMonitor
             foreach (var displayPath in displayPaths)
             {
                 WinApi.DISPLAYCONFIG_MODE_INFO currentDisplayTarget, currentDisplaySource;
+                Screen currentScreen;
                 try
                 {
                     currentDisplayTarget = displayModes.Single(mode => mode.infoType == WinApi.DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_TARGET
@@ -154,17 +155,17 @@ namespace ForceSensorPanelToMonitor
                     currentDisplaySource = displayModes.Single(mode => mode.infoType == WinApi.DISPLAYCONFIG_MODE_INFO_TYPE.DISPLAYCONFIG_MODE_INFO_TYPE_SOURCE
                                                                     && mode.adapterId.Equals(displayPath.sourceInfo.adapterId)
                                                                     && mode.id == displayPath.sourceInfo.id);
+
+                    currentScreen = screens.Single(screen => screen.Bounds.Left == currentDisplaySource.modeInfo.sourceMode.position.x
+                                                          && screen.Bounds.Top == currentDisplaySource.modeInfo.sourceMode.position.y);
                 }
-                catch(InvalidOperationException)
+                catch (InvalidOperationException)
                 {
                     // This can happen if an event fires while the console is locked or we fire while the UAC
                     // secure desktop is active.  We should now be detecting this above in the "IsLocked()" method
                     // but I'm putting this here as well, just in case there are other scenarios we aren't catching.
                     continue;
                 }
-
-                var currentScreen = screens.Single(screen => screen.Bounds.Left == currentDisplaySource.modeInfo.sourceMode.position.x
-                                                          && screen.Bounds.Top  == currentDisplaySource.modeInfo.sourceMode.position.y);
 
                 var sourceAdapterId = currentDisplaySource.adapterId;
                 var targetAdapterId = currentDisplayTarget.adapterId;
